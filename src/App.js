@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Card, Table, Typography, Row, Col, Empty } from "antd";
+import React, { useEffect, useState, useRef } from "react";
+import { Card, Table, Typography, Row, Col, Empty, Spin } from "antd";
 import SockJS from "sockjs-client";
 import "./App.css";
 
@@ -12,6 +12,9 @@ const App = () => {
     "Shelf 3": [],
     "Shelf 4": [],
   });
+
+  const [loading, setLoading] = useState(false); // Trạng thái loading chung cho tất cả tủ
+  const latestDataRef = useRef(null); // Lưu dữ liệu mới nhất nhận được
 
   // Kết nối WebSocket
   useEffect(() => {
@@ -45,11 +48,18 @@ const App = () => {
             ])
           );
 
-          // Cập nhật toàn bộ dữ liệu tủ
-          setShelves((prevShelves) => ({
-            ...prevShelves,
-            ...groupedData,
-          }));
+          // Lưu dữ liệu mới nhất
+          latestDataRef.current = groupedData;
+
+          // Nếu không đang loading, bắt đầu loading
+          if (!loading) {
+            setLoading(true);
+            setTimeout(() => {
+              // Sau thời gian loading, cập nhật giao diện với dữ liệu mới nhất
+              setShelves(latestDataRef.current);
+              setLoading(false); // Tắt trạng thái loading
+            }, 2000); // Thời gian loading
+          }
         }
       } catch (error) {
         console.error("Lỗi khi phân tích dữ liệu từ server:", error);
@@ -63,7 +73,7 @@ const App = () => {
     return () => {
       sock.close();
     };
-  }, []);
+  }, [loading]);
 
   // Cấu hình các cột của bảng
   const columns = [
@@ -76,16 +86,7 @@ const App = () => {
         <b style={{ color: "#096dd9", fontSize: "12px" }}>{text}</b>
       ),
     },
-    {
-      title: <span style={{ fontSize: "10px" }}>Số lượng</span>,
-      dataIndex: "quantity",
-      key: "quantity",
-      width: 60,
-      align: "center",
-      render: (text) => (
-        <span style={{ color: "#52c41a", fontSize: "12px" }}>{text}</span>
-      ),
-    },
+
     {
       title: <span style={{ fontSize: "10px" }}>Tên tác giả</span>,
       dataIndex: "author",
@@ -93,6 +94,16 @@ const App = () => {
       width: 120,
       render: (text) => (
         <i style={{ color: "#722ed1", fontSize: "12px" }}>{text}</i>
+      ),
+    },
+    {
+      title: <span style={{ fontSize: "10px" }}>Số lượng</span>,
+      dataIndex: "quantity",
+      key: "quantity",
+      width: 80,
+      align: "center",
+      render: (text) => (
+        <span style={{ color: "#52c41a", fontSize: "12px" }}>{text}</span>
       ),
     },
   ];
@@ -103,35 +114,63 @@ const App = () => {
         Quản lý tủ sách
       </Title>
       <Row gutter={[16, 16]}>
-        {Object.keys(shelves).map((shelfKey) => (
-          <Col key={shelfKey} xs={24} sm={24} md={12} lg={12} xl={12}>
-            <Card
-              title={shelfKey}
-              bordered={false}
-              className="shelf-card"
-              style={{
-                height: "320px",
-                overflow: "hidden",
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
-              <div style={{ flex: 1, overflowY: "auto" }}>
-                <Table
-                  columns={columns}
-                  dataSource={shelves[shelfKey] || []}
-                  pagination={false}
-                  bordered
-                  className="custom-table"
-                  scroll={{ x: 400 }}
-                  locale={{
-                    emptyText: <Empty description="Chưa có dữ liệu" />,
+        {Object.keys(shelves).map((shelfKey) => {
+          // Tính tổng số lượng sách
+          const totalQuantity = shelves[shelfKey]?.reduce(
+            (sum, book) => sum + book.quantity,
+            0
+          );
+
+          return (
+            <Col key={shelfKey} xs={24} sm={24} md={12} lg={12} xl={12}>
+              <Card
+                title={
+                  <>
+                    {shelfKey} (
+                    <span style={{ color: "#52c41a" }}>
+                      {totalQuantity || 0}
+                    </span>{" "}
+                    sách)
+                  </>
+                }
+                bordered={false}
+                className="shelf-card"
+                style={{
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    overflowY: "auto",
+                    padding: "8px",
+                    maxHeight: "300px",
                   }}
-                />
-              </div>
-            </Card>
-          </Col>
-        ))}
+                >
+                  {loading ? (
+                    <div style={{ textAlign: "center", padding: "50px 0" }}>
+                      <Spin size="large" />
+                    </div>
+                  ) : (
+                    <Table
+                      columns={columns}
+                      dataSource={shelves[shelfKey] || []}
+                      pagination={false}
+                      bordered
+                      className="custom-table"
+                      scroll={{ y: 200, x: 400 }}
+                      locale={{
+                        emptyText: <Empty description="Chưa có dữ liệu" />,
+                      }}
+                    />
+                  )}
+                </div>
+              </Card>
+            </Col>
+          );
+        })}
       </Row>
     </div>
   );
